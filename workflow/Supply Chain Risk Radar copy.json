@@ -1,0 +1,2116 @@
+{
+  "name": "Supply Chain Risk Radar copy",
+  "nodes": [
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an analyst extracting structured supply-chain risk signals from news articles.\nReturn STRICT JSON only (no prose). Do not invent facts. If unknown, use null.\n\nINPUT\n- INPUT_JSON is a JSON array. Each element has fields like:\n  { \"id\", \"title\", \"description\", \"publishedAt\", \"source\", \"url\" }\n\nTASK (apply to every element of INPUT_JSON independently):\n1) Classify disruption type(s): [\"Physical\",\"Cyber\",\"Trade/Geopolitical\",\"Infrastructure/Transport\"].\n2) Extract impacted nodes (ports, canals, rail corridors, factories, borders) with country.\n3) Map countries to ISO-3166-1 alpha-2 codes. If multiple countries, return all.\n4) Assess scope: \"Local\" | \"Regional\" | \"Global\".\n5) Assess economic importance of the main node: \"High\" | \"Medium\" | \"Low\".\n6) Identify trade dependency context: \"High\" | \"Medium\" | \"Low\".\n7) Estimate population/countries impacted (bucketed):\n   PopImpactBucket ∈ [\"Minimal\",\"City\",\"State/Province\",\"National\",\"Multi-country\"].\n8) Provide a ≤25-word impact summary focused on supply-chain consequences.\n\nSCORING (0–10, integers allowed; use 0 when truly unknown):\n- ScopeScore: None/Irrelevant=1, Local=1, State/Province=3, Regional(multi-province)=5, Multi-country(2–3)=7, Global(≥4)=9–10.\n- NodeImportanceScore: High(critical/global hub)=9–10, Medium=5, Low=1, None/Unknown=0.\n- RiskTypeScore (max if multiple): Cyber=9–10, Trade/Geopolitical=8, Infrastructure/Transport=5, Physical=3, None/Unknown=0.\n- TradeDependencyScore: High=9–10, Medium=5, Low=1, None/Unknown=0.\n- PopulationImpactScore: Minimal=0, City=2, State/Province=4, National=7, Multi-country=9–10.\n\nAlso compute:\n- SuggestedModelScore (0–10) = 0.25*Scope + 0.25*NodeImportance + 0.20*RiskType + 0.20*TradeDependency + 0.10*PopulationImpact.\n- Confidence (0–1).\n- EvidenceFieldsUsed: subset of [\"title\",\"description\"].\n\nCONSTRAINTS\n- Be conservative; if speculative/outdated: lower ScopeScore or set \"is_speculative\": true.\n- If the event looks minor but the headline is sensational, cap SuggestedModelScore ≤ 4.\n- Prefer title + description. \n\nOUTPUT\nReturn ONLY a JSON array. Each array element MUST correspond 1:1 to an input item and MUST include the same \"id\".\nSchema for each element:\n{\n  \"id\": \"<copy from input>\",\n  \"risk_types\": [\"Physical\" | \"Cyber\" | \"Trade/Geopolitical\" | \"Infrastructure/Transport\", ...],\n  \"scope\": \"Local\" | \"Regional\" | \"Global\" | null,\n  \"impacted_nodes\": [{\"name\":\"...\", \"type\":\"port|canal|rail|factory|border|road|airport|other\", \"country\":\"...\", \"iso2\":\"..\"}] | [],\n  \"countries_impacted\": [\"US\",\"IN\", ...] | [],\n  \"economic_importance\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"trade_dependency\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"population_impact_bucket\": \"Minimal\" | \"City\" | \"State/Province\" | \"National\" | \"Multi-country\" | null,\n  \"impact_summary\": \"...\",\n  \"scores\": {\n    \"scope_score\": 0,\n    \"node_importance_score\": 0,\n    \"risk_type_score\": 0,\n    \"trade_dependency_score\": 0,\n    \"population_impact_score\": 0,\n    \"suggested_model_score\": 0\n  },\n  \"confidence\": 0.0,\n  \"is_speculative\": false,\n  \"evidence_fields_used\": [\"title\",\"description\"]\n}\n\nINPUT_JSON = {{ JSON.stringify($json.items) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        944,
+        -384
+      ],
+      "id": "bb6c594c-e11e-48cc-92db-ac9a20789c0a",
+      "name": "Message a model",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "yuuUDryYiacSOJx3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "compare": "selectedFields",
+        "fieldsToCompare": "id",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        48,
+        960
+      ],
+      "id": "146f6913-4ec6-49f6-b6ee-b2ad52816762",
+      "name": "Remove Duplicates"
+    },
+    {
+      "parameters": {
+        "url": "=https://serpapi.com/search?engine=google_news_light",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "api_key",
+              "value": "$env.SERPAPI_KEY"
+            },
+            {
+              "name": "q",
+              "value": "={{ $json.q }}"
+            },
+            {
+              "name": "hl",
+              "value": "={{ $json.hl }}"
+            },
+            {
+              "name": " as_qdr",
+              "value": "={{ $json.daysSinceLast }}"
+            },
+            {
+              "name": "gl",
+              "value": "={{ $json.gl }}"
+            },
+            {
+              "name": "google_domain",
+              "value": "={{ $json.google_domain }}"
+            },
+            {
+              "name": "device",
+              "value": "={{ $json.device }}"
+            },
+            {
+              "name": "num",
+              "value": "={{ $json.num }}"
+            },
+            {
+              "name": "start",
+              "value": "={{ $json.start }}"
+            },
+            {
+              "name": "no_cache",
+              "value": "={{ $json.no_cache }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -624,
+        864
+      ],
+      "id": "da22a74f-c8df-4937-b02c-09f711bbde86",
+      "name": "Get News"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalization for SerpAPI Google News Light -> news_results items\n\nfunction normalizeUrl(urlStr) {\n  try {\n    if (!urlStr) return '';\n    // remove hash\n    let base = urlStr.split('#')[0];\n\n    // split path + query\n    let path = base;\n    let query = '';\n    const qIdx = base.indexOf('?');\n    if (qIdx >= 0) {\n      path = base.slice(0, qIdx);\n      query = base.slice(qIdx + 1);\n    }\n\n    // lowercase scheme+host\n    path = path.replace(/^(https?:\\/\\/)([^/]+)/i, (_, scheme, host) => scheme + host.toLowerCase());\n\n    // parse & filter query params (no global URL needed)\n    const trackers = new Set(['utm_source','utm_medium','utm_campaign','utm_term','utm_content','gclid','fbclid','mc_cid','mc_eid']);\n    const params = {};\n    if (query) {\n      const pairs = query.split('&');\n      for (const pair of pairs) {\n        if (!pair) continue;\n        const [k, v=''] = pair.split('=');\n        if (!k) continue;\n        const key = decodeURIComponent(k);\n        if (trackers.has(key)) continue;\n        const val = decodeURIComponent(v);\n        (params[key] ||= []).push(val);\n      }\n    }\n    const entries = Object.keys(params).sort().flatMap(k => params[k].map(v => [k, v]));\n    const qs = entries.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&');\n\n    return qs ? `${path}?${qs}` : path;\n  } catch (e) {\n    return urlStr || '';\n  }\n}\n\nfunction simpleHash(str) {\n  let hash = 0;\n  if (!str || str.length === 0) return hash.toString();\n  for (let i = 0; i < str.length; i++) {\n    const chr = str.charCodeAt(i);\n    hash = ((hash << 5) - hash) + chr;\n    hash |= 0;\n  }\n  return Math.abs(hash).toString();\n}\n\nfunction parseRelativeDate(s) {\n  if (!s || typeof s !== 'string') return '';\n  const now = new Date();\n  const txt = s.trim().toLowerCase();\n\n  if (txt === 'today' || txt === 'just now') return now.toISOString();\n  if (txt === 'yesterday') return new Date(now.getTime() - 86400000).toISOString();\n\n  const m = txt.match(/^(\\d+)\\s+(minute|hour|day|week|month|year)s?\\s+ago$/);\n  if (m) {\n    const n = parseInt(m[1], 10);\n    const unit = m[2];\n    const msMap = {\n      minute: 60 * 1000,\n      hour:   60 * 60 * 1000,\n      day:    24 * 60 * 60 * 1000,\n      week:   7 * 24 * 60 * 60 * 1000,\n      month:  30 * 24 * 60 * 60 * 1000,   // approx\n      year:   365 * 24 * 60 * 60 * 1000   // approx\n    };\n    const ms = msMap[unit] || 0;\n    if (ms) return new Date(now.getTime() - n * ms).toISOString();\n  }\n\n  // Sometimes SerpAPI can return exact dates (rare). Try parsing.\n  const t = Date.parse(s);\n  return isNaN(t) ? '' : new Date(t).toISOString();\n}\n\n// After \"Split Out\" (field: news_results). Each incoming item is one article.\nreturn $input.all().map(item => {\n  const art = item.json || {};\n  const norm = normalizeUrl(art.link || '');\n  const publishedAt = parseRelativeDate(art.date);\n\n  const hashBase = norm || `${art.source || ''}|${art.title || ''}|${publishedAt || art.date || ''}`;\n  const id = simpleHash(hashBase);\n\n  return {\n    json: {\n      id,\n      position: art.position ?? null,\n      title: art.title || '',\n      author: '',                 // not provided by this API\n      source_id: '',              // not provided by this API\n      source_name: art.source || '',\n      description: art.snippet || '',\n      url: art.link || '',\n      normalized_url: norm,\n      urlToImage: art.thumbnail || '',\n      publishedAt,                // ISO when derivable; '' otherwise\n      date_relative: art.date || ''         // not provided by this API\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        960
+      ],
+      "id": "cd8a4cd7-8359-4ed7-8db0-27607ccad4fb",
+      "name": "Normalize Data & Primary Key"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "news_results",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        944
+      ],
+      "id": "c4714ea6-63b0-4865-886a-21b106402b89",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\n\nfor (const i of items) {\n  const parts = i.json.content?.parts;\n  if (!parts || !parts[0]?.text) continue;\n\n  const raw = parts[0].text.trim();\n  let arr;\n  try {\n    arr = JSON.parse(raw);        // Gemini returns a JSON array (as text)\n  } catch (e) {\n    throw new Error(\"Parse error: \" + raw.slice(0, 400));\n  }\n\n  for (const obj of arr) {\n    // Hoist the arrays you want to split on\n    out.push({\n      json: {\n        id: obj.id,\n        // top-level mirrors (so Item Lists can split them)\n        countries_impacted: obj.countries_impacted ?? [],\n        impacted_nodes: obj.impacted_nodes ?? [],\n        risk_types: obj.risk_types ?? [],\n        // keep full model payload too for mapping later\n        parsedData: obj,\n        _raw_model_json: raw\n      }\n    });\n  }\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        -384
+      ],
+      "id": "10a448c3-7e50-4a1e-9362-9180a33b4712",
+      "name": "Parse JSON",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().flatMap(({ json }) => {\n  const d = json.parsedData || {};\n\n  // 1) Countries list: prefer countries_impacted; fallback to impacted_nodes[].iso2; else [null]\n  const countries = Array.isArray(d.countries_impacted) && d.countries_impacted.length > 0\n    ? d.countries_impacted\n    : (Array.isArray(d.impacted_nodes) && d.impacted_nodes.length > 0\n        ? d.impacted_nodes.map(node => node?.iso2 ?? null)\n        : [null]);\n\n  // 2) Scores + enums\n  const s = d.scores || {};\n  const allowed = new Set(['port','canal','strait','factory','rail','airport','border','road','power','telecom','other']);\n  const node0 = Array.isArray(d.impacted_nodes) && d.impacted_nodes.length ? d.impacted_nodes[0] : {};\n  const nodeName = node0?.name ?? null;\n  const nodeTypeRaw = node0?.type ?? null;\n  const nodeType = nodeTypeRaw && allowed.has(nodeTypeRaw) ? nodeTypeRaw : (nodeTypeRaw ? 'other' : null);\n\n  // 3) Keys + hygiene\n  const eventId = json['Primary Key'] || null;\n  const title = (json.Title || '').trim() || null;\n  const description = ((json.Description ?? json.Desription) || '').trim() || null;\n  const source = json.source_name || json.source?.name || null;\n  const publishedAt = json['Published At'] || null;\n  const normalizedUrl = json['normalized url'] || null;\n  const url = json.url || null;\n\n  // 4) Emit one row per country\n  return countries.map(rawIso => {\n    const iso2 = typeof rawIso === 'string' && rawIso.trim() ? rawIso.trim().toUpperCase() : null;\n    const safeIso = iso2 || 'NA';\n\n    return {\n      json: {\n        // provenance\n        published_at: publishedAt,\n        title,\n        description,\n        source,\n        url,\n        normalized_url: normalizedUrl,\n\n        // keys\n        event_id: eventId,\n        row_id: eventId ? `${eventId}|${safeIso}` : null,\n\n        // exploded dimension\n        country_iso2: iso2,\n\n        // model fields\n        risk_types: Array.isArray(d.risk_types) ? d.risk_types.join(',') : null,\n        node_name: nodeName,\n        node_type: nodeType,\n        scope: d.scope || null,\n        economic_importance: d.economic_importance || null,\n        trade_dependency: d.trade_dependency || null,\n        population_impact_bucket: d.population_impact_bucket || null,\n        impact_summary: d.impact_summary || null,\n\n        // scores\n        scope_score: s.scope_score ?? null,\n        node_importance_score: s.node_importance_score ?? null,\n        risk_type_score: s.risk_type_score ?? null,\n        trade_dependency_score: s.trade_dependency_score ?? null,\n        population_impact_score: s.population_impact_score ?? null,\n        suggested_model_score: s.suggested_model_score ?? null,\n\n        // QA\n        confidence: d.confidence ?? null,\n        is_speculative: !!d.is_speculative,\n\n        // audit\n        _raw_model_json: json.content?.parts?.[0]?.text || null\n      }\n    };\n  });\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        1056
+      ],
+      "id": "bdfdf7de-131c-4d33-b40e-61a71a021e29",
+      "name": "Map Columns"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "$env.SHEETS_DOC_ID ",
+          "mode": "list",
+          "cachedResultName": "NEWS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1sXBF326HvdNZiXq1OzOcyP8eAFYsELg6xdgtdNsYTfU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1sXBF326HvdNZiXq1OzOcyP8eAFYsELg6xdgtdNsYTfU/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Title": "={{ $json.title }}",
+            "Desription": "={{ $json.description }}",
+            "url": "={{ $json.url }}",
+            "Published At": "={{ $json.publishedAt }}",
+            "Primary Key": "={{ $json.id }}",
+            "normalized url": "={{ $json.normalized_url }}"
+          },
+          "matchingColumns": [
+            "Primary Key"
+          ],
+          "schema": [
+            {
+              "id": "Primary Key",
+              "displayName": "Primary Key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Title",
+              "displayName": "Title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Desription",
+              "displayName": "Desription",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "normalized url",
+              "displayName": "normalized url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Published At",
+              "displayName": "Published At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Content",
+              "displayName": "Content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "first seen at",
+              "displayName": "first seen at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "last seen at",
+              "displayName": "last seen at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Severity",
+              "displayName": "Severity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Regions",
+              "displayName": "Regions",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        272,
+        960
+      ],
+      "id": "d6289865-1bd9-48c9-a898-1ced8c1ef086",
+      "name": "Raw data in News",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A6eBd4iZnfcdEr17",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "$env.SHEETS_DOC_ID ",
+          "mode": "list",
+          "cachedResultName": "NEWS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1sXBF326HvdNZiXq1OzOcyP8eAFYsELg6xdgtdNsYTfU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1499188807,
+          "mode": "list",
+          "cachedResultName": "Staging",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1sXBF326HvdNZiXq1OzOcyP8eAFYsELg6xdgtdNsYTfU/edit#gid=1499188807"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "published_at": "={{ $json.published_at }}",
+            "title": "={{ $json.title }}",
+            "description": "={{ $json.description }}",
+            "source": "={{ $json.source }}",
+            "url": "={{ $json.url }}",
+            "normalized_url": "={{ $json.normalized_url }}",
+            "row_id": "={{ $json.row_id }}",
+            "event_id": "={{ $json.event_id }}",
+            "country_iso2": "={{ $json.country_iso2 }}",
+            "risk_types": "={{ $json.risk_types }}",
+            "node_name": "={{ $json.node_name }}",
+            "node_type": "={{ $json.node_type }}",
+            "scope": "={{ $json.scope }}",
+            "economic_importance": "={{ $json.economic_importance }}",
+            "trade_dependency": "={{ $json.trade_dependency }}",
+            "population_impact_bucket": "={{ $json.population_impact_bucket }}",
+            "impact_summary": "={{ $json.impact_summary }}",
+            "scope_score": "={{ $json.scope_score }}",
+            "node_importance_score": "={{ $json.node_importance_score }}",
+            "risk_type_score": "={{ $json.risk_type_score }}",
+            "trade_dependency_score": "={{ $json.trade_dependency_score }}",
+            "population_impact_score": "={{ $json.population_impact_score }}",
+            "suggested_model_score": "={{ $json.suggested_model_score }}",
+            "confidence": "={{ $json.confidence }}",
+            "is_speculative": "={{ $json.is_speculative }}",
+            "_raw_model_json": "={{ $json._raw_model_json }}"
+          },
+          "matchingColumns": [
+            "row_id"
+          ],
+          "schema": [
+            {
+              "id": "published_at",
+              "displayName": "published_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "normalized_url",
+              "displayName": "normalized_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_id",
+              "displayName": "row_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "country_iso2",
+              "displayName": "country_iso2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "risk_types",
+              "displayName": "risk_types",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "node_name",
+              "displayName": "node_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "node_type",
+              "displayName": "node_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "scope",
+              "displayName": "scope",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "economic_importance",
+              "displayName": "economic_importance",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "trade_dependency",
+              "displayName": "trade_dependency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "population_impact_bucket",
+              "displayName": "population_impact_bucket",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "impact_summary",
+              "displayName": "impact_summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "scope_score",
+              "displayName": "scope_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "node_importance_score",
+              "displayName": "node_importance_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "risk_type_score",
+              "displayName": "risk_type_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "trade_dependency_score",
+              "displayName": "trade_dependency_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "population_impact_score",
+              "displayName": "population_impact_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "suggested_model_score",
+              "displayName": "suggested_model_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "is_speculative",
+              "displayName": "is_speculative",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "_raw_model_json",
+              "displayName": "_raw_model_json",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "base_scsi",
+              "displayName": "base_scsi",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "age_decay_mult",
+              "displayName": "age_decay_mult",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "base_after_age",
+              "displayName": "base_after_age",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "conf_cap",
+              "displayName": "conf_cap",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "spec_cap",
+              "displayName": "spec_cap",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "country_count",
+              "displayName": "country_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "spread_bonus",
+              "displayName": "spread_bonus",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "final_scsi",
+              "displayName": "final_scsi",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        2464,
+        1056
+      ],
+      "id": "9dbe5913-f841-4483-b489-68e2338f51a1",
+      "name": "Staging Data",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A6eBd4iZnfcdEr17",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "Primary Key",
+              "field2": "=id"
+            }
+          ]
+        },
+        "joinMode": "keepEverything",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1792,
+        1056
+      ],
+      "id": "48e647b1-9665-4ca8-864a-1730b3c56346",
+      "name": "Combine LLM output with Inputs"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "countries_impacted",
+        "include": "allOtherFields",
+        "options": {
+          "disableDotNotation": false
+        }
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        1056
+      ],
+      "id": "73ef3e95-5325-4783-9511-50be75bff954",
+      "name": "Explode Basis Countries"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "$env.SHEETS_DOC_ID ",
+          "mode": "list",
+          "cachedResultName": "NEWS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1sXBF326HvdNZiXq1OzOcyP8eAFYsELg6xdgtdNsYTfU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2036998743,
+          "mode": "list",
+          "cachedResultName": "State",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1sXBF326HvdNZiXq1OzOcyP8eAFYsELg6xdgtdNsYTfU/edit#gid=2036998743"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -1072,
+        864
+      ],
+      "id": "e718ef95-9935-4a0a-b6d2-fa5abe31bd54",
+      "name": "Get Last Fetched Date",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "A6eBd4iZnfcdEr17",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "\n\n\n\n\n\n\n\n\n\n\n\n\n\nReads last published date from “State” sheet to avoid refetching old news.",
+        "height": 256
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1136,
+        832
+      ],
+      "typeVersion": 1,
+      "id": "557594a1-51ff-450b-9235-c83d1274d01d",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "Queries NewsAPI for recent, supply chain–related disruptions since the last fetch date.",
+        "height": 272,
+        "width": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -672,
+        752
+      ],
+      "typeVersion": 1,
+      "id": "9337c9ae-4251-4736-a4fa-969ebd19706f",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "Cleans URLs, strips trackers, and creates a stable hashed id for deduplication.",
+        "height": 288,
+        "width": 208
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -464,
+        832
+      ],
+      "typeVersion": 1,
+      "id": "a52ee8af-5e95-4679-9adf-7b31b56bc315",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "Sends article details to Google Gemini to extract disruption type, impacted nodes, scope, and scores.",
+        "height": 2000,
+        "width": 272
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        928,
+        -496
+      ],
+      "typeVersion": 1,
+      "id": "71506514-b135-4e15-ab36-d4ed79887831",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "Duplicates rows so each impacted country has its own record.",
+        "height": 208
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1952,
+        1008
+      ],
+      "typeVersion": 1,
+      "id": "1ee3e798-8a9b-484e-815a-27c16be987f0",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "Saves structured, scored data into “NEWS → Staging” sheet keyed by row_id.",
+        "height": 224
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2400,
+        992
+      ],
+      "typeVersion": 1,
+      "id": "9f67ed82-1f75-4c2c-a392-d4e3076f2a72",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## 📌 Note: \n\nThis workflow is the data ingestion & pre-processing (ETL) layer for the Looker Studio dashboard — automates news collection, enrichment, and staging for visualization.",
+        "width": 592
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2080,
+        512
+      ],
+      "typeVersion": 1,
+      "id": "f6e32769-bd08-47b7-bf7a-2358ba228705",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.lane}}",
+                    "rightValue": "={{\"0\"}}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "a3bbb2ca-b3ab-44e9-8681-a0506b25f1a1"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "8a0707d1-2d6b-4902-a465-8596a21f7e7c",
+                    "leftValue": "={{$json.lane}}",
+                    "rightValue": "={{\"1\"}}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "9ff7defc-01e2-40f9-994f-5b09f642c735",
+                    "leftValue": "={{$json.lane}}",
+                    "rightValue": "={{\"2\"}}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "9b0dd5e4-407a-4169-a094-19f6b5c114ed",
+                    "leftValue": "={{$json.lane}}",
+                    "rightValue": "={{\"3\"}}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "ad58b15d-0fdd-49a3-889e-632f6c97d689",
+                    "leftValue": "={{$json.lane}}",
+                    "rightValue": "={{\"4\"}}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e046fa77-708c-4bce-9dbc-5075499bca5b",
+                    "leftValue": "={{$json.lane}}",
+                    "rightValue": "={{\"5\"}}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "ab47f229-afc5-4f86-b145-97452e64aa28",
+                    "leftValue": "={{$json.lane}}",
+                    "rightValue": "={{\"6\"}}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6650fd12-19d3-4d3d-b5d8-823b1be845d9",
+                    "leftValue": "={{$json.lane}}",
+                    "rightValue": "={{\"7\"}}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "f6bba86f-eb40-4b12-8c84-a0b2936dc07f",
+                    "leftValue": "={{$json.lane}}",
+                    "rightValue": "={{\"8\"}}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d862d494-27d3-43d5-a9ef-f63b08f4c8ce",
+                    "leftValue": "={{$json.lane}}",
+                    "rightValue": "={{\"9\"}}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        720,
+        352
+      ],
+      "id": "c7ade693-61d5-4d06-a243-e532a8a70dc7",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an analyst extracting structured supply-chain risk signals from news articles.\nReturn STRICT JSON only (no prose). Do not invent facts. If unknown, use null.\n\nINPUT\n- INPUT_JSON is a JSON array. Each element has fields like:\n  { \"id\", \"title\", \"description\", \"content\", \"publishedAt\", \"source\", \"url\" }\n\nTASK (apply to every element of INPUT_JSON independently):\n1) Classify disruption type(s): [\"Physical\",\"Cyber\",\"Trade/Geopolitical\",\"Infrastructure/Transport\"].\n2) Extract impacted nodes (ports, canals, rail corridors, factories, borders) with country.\n3) Map countries to ISO-3166-1 alpha-2 codes. If multiple countries, return all.\n4) Assess scope: \"Local\" | \"Regional\" | \"Global\".\n5) Assess economic importance of the main node: \"High\" | \"Medium\" | \"Low\".\n6) Identify trade dependency context: \"High\" | \"Medium\" | \"Low\".\n7) Estimate population/countries impacted (bucketed):\n   PopImpactBucket ∈ [\"Minimal\",\"City\",\"State/Province\",\"National\",\"Multi-country\"].\n8) Provide a ≤25-word impact summary focused on supply-chain consequences.\n\nSCORING (0–10, integers allowed; use 0 when truly unknown):\n- ScopeScore: None/Irrelevant=1, Local=1, State/Province=3, Regional(multi-province)=5, Multi-country(2–3)=7, Global(≥4)=9–10.\n- NodeImportanceScore: High(critical/global hub)=9–10, Medium=5, Low=1, None/Unknown=0.\n- RiskTypeScore (max if multiple): Cyber=9–10, Trade/Geopolitical=8, Infrastructure/Transport=5, Physical=3, None/Unknown=0.\n- TradeDependencyScore: High=9–10, Medium=5, Low=1, None/Unknown=0.\n- PopulationImpactScore: Minimal=0, City=2, State/Province=4, National=7, Multi-country=9–10.\n\nAlso compute:\n- SuggestedModelScore (0–10) = 0.25*Scope + 0.25*NodeImportance + 0.20*RiskType + 0.20*TradeDependency + 0.10*PopulationImpact.\n- Confidence (0–1).\n- EvidenceFieldsUsed: subset of [\"title\",\"description\",\"content\"].\n\nCONSTRAINTS\n- Be conservative; if speculative/outdated: lower ScopeScore or set \"is_speculative\": true.\n- If the event looks minor but the headline is sensational, cap SuggestedModelScore ≤ 4.\n- Prefer title + description. If content is long, read only the first ~1000 characters.\n\nOUTPUT\nReturn ONLY a JSON array. Each array element MUST correspond 1:1 to an input item and MUST include the same \"id\".\nSchema for each element:\n{\n  \"id\": \"<copy from input>\",\n  \"risk_types\": [\"Physical\" | \"Cyber\" | \"Trade/Geopolitical\" | \"Infrastructure/Transport\", ...],\n  \"scope\": \"Local\" | \"Regional\" | \"Global\" | null,\n  \"impacted_nodes\": [{\"name\":\"...\", \"type\":\"port|canal|rail|factory|border|road|airport|other\", \"country\":\"...\", \"iso2\":\"..\"}] | [],\n  \"countries_impacted\": [\"US\",\"IN\", ...] | [],\n  \"economic_importance\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"trade_dependency\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"population_impact_bucket\": \"Minimal\" | \"City\" | \"State/Province\" | \"National\" | \"Multi-country\" | null,\n  \"impact_summary\": \"...\",\n  \"scores\": {\n    \"scope_score\": 0,\n    \"node_importance_score\": 0,\n    \"risk_type_score\": 0,\n    \"trade_dependency_score\": 0,\n    \"population_impact_score\": 0,\n    \"suggested_model_score\": 0\n  },\n  \"confidence\": 0.0,\n  \"is_speculative\": false,\n  \"evidence_fields_used\": [\"title\",\"description\"]\n}\n\nINPUT_JSON = {{ JSON.stringify($json.items) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        944,
+        -192
+      ],
+      "id": "88fce819-c752-4634-9f36-4d348c678a40",
+      "name": "Message a model1",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "yuuUDryYiacSOJx3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an analyst extracting structured supply-chain risk signals from news articles.\nReturn STRICT JSON only (no prose). Do not invent facts. If unknown, use null.\n\nINPUT\n- INPUT_JSON is a JSON array. Each element has fields like:\n  { \"id\", \"title\", \"description\", \"content\", \"publishedAt\", \"source\", \"url\" }\n\nTASK (apply to every element of INPUT_JSON independently):\n1) Classify disruption type(s): [\"Physical\",\"Cyber\",\"Trade/Geopolitical\",\"Infrastructure/Transport\"].\n2) Extract impacted nodes (ports, canals, rail corridors, factories, borders) with country.\n3) Map countries to ISO-3166-1 alpha-2 codes. If multiple countries, return all.\n4) Assess scope: \"Local\" | \"Regional\" | \"Global\".\n5) Assess economic importance of the main node: \"High\" | \"Medium\" | \"Low\".\n6) Identify trade dependency context: \"High\" | \"Medium\" | \"Low\".\n7) Estimate population/countries impacted (bucketed):\n   PopImpactBucket ∈ [\"Minimal\",\"City\",\"State/Province\",\"National\",\"Multi-country\"].\n8) Provide a ≤25-word impact summary focused on supply-chain consequences.\n\nSCORING (0–10, integers allowed; use 0 when truly unknown):\n- ScopeScore: None/Irrelevant=1, Local=1, State/Province=3, Regional(multi-province)=5, Multi-country(2–3)=7, Global(≥4)=9–10.\n- NodeImportanceScore: High(critical/global hub)=9–10, Medium=5, Low=1, None/Unknown=0.\n- RiskTypeScore (max if multiple): Cyber=9–10, Trade/Geopolitical=8, Infrastructure/Transport=5, Physical=3, None/Unknown=0.\n- TradeDependencyScore: High=9–10, Medium=5, Low=1, None/Unknown=0.\n- PopulationImpactScore: Minimal=0, City=2, State/Province=4, National=7, Multi-country=9–10.\n\nAlso compute:\n- SuggestedModelScore (0–10) = 0.25*Scope + 0.25*NodeImportance + 0.20*RiskType + 0.20*TradeDependency + 0.10*PopulationImpact.\n- Confidence (0–1).\n- EvidenceFieldsUsed: subset of [\"title\",\"description\",\"content\"].\n\nCONSTRAINTS\n- Be conservative; if speculative/outdated: lower ScopeScore or set \"is_speculative\": true.\n- If the event looks minor but the headline is sensational, cap SuggestedModelScore ≤ 4.\n- Prefer title + description. If content is long, read only the first ~1000 characters.\n\nOUTPUT\nReturn ONLY a JSON array. Each array element MUST correspond 1:1 to an input item and MUST include the same \"id\".\nSchema for each element:\n{\n  \"id\": \"<copy from input>\",\n  \"risk_types\": [\"Physical\" | \"Cyber\" | \"Trade/Geopolitical\" | \"Infrastructure/Transport\", ...],\n  \"scope\": \"Local\" | \"Regional\" | \"Global\" | null,\n  \"impacted_nodes\": [{\"name\":\"...\", \"type\":\"port|canal|rail|factory|border|road|airport|other\", \"country\":\"...\", \"iso2\":\"..\"}] | [],\n  \"countries_impacted\": [\"US\",\"IN\", ...] | [],\n  \"economic_importance\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"trade_dependency\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"population_impact_bucket\": \"Minimal\" | \"City\" | \"State/Province\" | \"National\" | \"Multi-country\" | null,\n  \"impact_summary\": \"...\",\n  \"scores\": {\n    \"scope_score\": 0,\n    \"node_importance_score\": 0,\n    \"risk_type_score\": 0,\n    \"trade_dependency_score\": 0,\n    \"population_impact_score\": 0,\n    \"suggested_model_score\": 0\n  },\n  \"confidence\": 0.0,\n  \"is_speculative\": false,\n  \"evidence_fields_used\": [\"title\",\"description\"]\n}\n\nINPUT_JSON = {{ JSON.stringify($json.items) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        944,
+        0
+      ],
+      "id": "54e9a145-3f9b-4ec6-98c4-32981fc22196",
+      "name": "Message a model2",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "yuuUDryYiacSOJx3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an analyst extracting structured supply-chain risk signals from news articles.\nReturn STRICT JSON only (no prose). Do not invent facts. If unknown, use null.\n\nINPUT\n- INPUT_JSON is a JSON array. Each element has fields like:\n  { \"id\", \"title\", \"description\", \"content\", \"publishedAt\", \"source\", \"url\" }\n\nTASK (apply to every element of INPUT_JSON independently):\n1) Classify disruption type(s): [\"Physical\",\"Cyber\",\"Trade/Geopolitical\",\"Infrastructure/Transport\"].\n2) Extract impacted nodes (ports, canals, rail corridors, factories, borders) with country.\n3) Map countries to ISO-3166-1 alpha-2 codes. If multiple countries, return all.\n4) Assess scope: \"Local\" | \"Regional\" | \"Global\".\n5) Assess economic importance of the main node: \"High\" | \"Medium\" | \"Low\".\n6) Identify trade dependency context: \"High\" | \"Medium\" | \"Low\".\n7) Estimate population/countries impacted (bucketed):\n   PopImpactBucket ∈ [\"Minimal\",\"City\",\"State/Province\",\"National\",\"Multi-country\"].\n8) Provide a ≤25-word impact summary focused on supply-chain consequences.\n\nSCORING (0–10, integers allowed; use 0 when truly unknown):\n- ScopeScore: None/Irrelevant=1, Local=1, State/Province=3, Regional(multi-province)=5, Multi-country(2–3)=7, Global(≥4)=9–10.\n- NodeImportanceScore: High(critical/global hub)=9–10, Medium=5, Low=1, None/Unknown=0.\n- RiskTypeScore (max if multiple): Cyber=9–10, Trade/Geopolitical=8, Infrastructure/Transport=5, Physical=3, None/Unknown=0.\n- TradeDependencyScore: High=9–10, Medium=5, Low=1, None/Unknown=0.\n- PopulationImpactScore: Minimal=0, City=2, State/Province=4, National=7, Multi-country=9–10.\n\nAlso compute:\n- SuggestedModelScore (0–10) = 0.25*Scope + 0.25*NodeImportance + 0.20*RiskType + 0.20*TradeDependency + 0.10*PopulationImpact.\n- Confidence (0–1).\n- EvidenceFieldsUsed: subset of [\"title\",\"description\",\"content\"].\n\nCONSTRAINTS\n- Be conservative; if speculative/outdated: lower ScopeScore or set \"is_speculative\": true.\n- If the event looks minor but the headline is sensational, cap SuggestedModelScore ≤ 4.\n- Prefer title + description. If content is long, read only the first ~1000 characters.\n\nOUTPUT\nReturn ONLY a JSON array. Each array element MUST correspond 1:1 to an input item and MUST include the same \"id\".\nSchema for each element:\n{\n  \"id\": \"<copy from input>\",\n  \"risk_types\": [\"Physical\" | \"Cyber\" | \"Trade/Geopolitical\" | \"Infrastructure/Transport\", ...],\n  \"scope\": \"Local\" | \"Regional\" | \"Global\" | null,\n  \"impacted_nodes\": [{\"name\":\"...\", \"type\":\"port|canal|rail|factory|border|road|airport|other\", \"country\":\"...\", \"iso2\":\"..\"}] | [],\n  \"countries_impacted\": [\"US\",\"IN\", ...] | [],\n  \"economic_importance\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"trade_dependency\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"population_impact_bucket\": \"Minimal\" | \"City\" | \"State/Province\" | \"National\" | \"Multi-country\" | null,\n  \"impact_summary\": \"...\",\n  \"scores\": {\n    \"scope_score\": 0,\n    \"node_importance_score\": 0,\n    \"risk_type_score\": 0,\n    \"trade_dependency_score\": 0,\n    \"population_impact_score\": 0,\n    \"suggested_model_score\": 0\n  },\n  \"confidence\": 0.0,\n  \"is_speculative\": false,\n  \"evidence_fields_used\": [\"title\",\"description\"]\n}\n\nINPUT_JSON = {{ JSON.stringify($json.items) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        944,
+        384
+      ],
+      "id": "83b3c6f3-4db4-4675-88f7-995b6e7ea998",
+      "name": "Message a model3",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "yuuUDryYiacSOJx3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an analyst extracting structured supply-chain risk signals from news articles.\nReturn STRICT JSON only (no prose). Do not invent facts. If unknown, use null.\n\nINPUT\n- INPUT_JSON is a JSON array. Each element has fields like:\n  { \"id\", \"title\", \"description\", \"content\", \"publishedAt\", \"source\", \"url\" }\n\nTASK (apply to every element of INPUT_JSON independently):\n1) Classify disruption type(s): [\"Physical\",\"Cyber\",\"Trade/Geopolitical\",\"Infrastructure/Transport\"].\n2) Extract impacted nodes (ports, canals, rail corridors, factories, borders) with country.\n3) Map countries to ISO-3166-1 alpha-2 codes. If multiple countries, return all.\n4) Assess scope: \"Local\" | \"Regional\" | \"Global\".\n5) Assess economic importance of the main node: \"High\" | \"Medium\" | \"Low\".\n6) Identify trade dependency context: \"High\" | \"Medium\" | \"Low\".\n7) Estimate population/countries impacted (bucketed):\n   PopImpactBucket ∈ [\"Minimal\",\"City\",\"State/Province\",\"National\",\"Multi-country\"].\n8) Provide a ≤25-word impact summary focused on supply-chain consequences.\n\nSCORING (0–10, integers allowed; use 0 when truly unknown):\n- ScopeScore: None/Irrelevant=1, Local=1, State/Province=3, Regional(multi-province)=5, Multi-country(2–3)=7, Global(≥4)=9–10.\n- NodeImportanceScore: High(critical/global hub)=9–10, Medium=5, Low=1, None/Unknown=0.\n- RiskTypeScore (max if multiple): Cyber=9–10, Trade/Geopolitical=8, Infrastructure/Transport=5, Physical=3, None/Unknown=0.\n- TradeDependencyScore: High=9–10, Medium=5, Low=1, None/Unknown=0.\n- PopulationImpactScore: Minimal=0, City=2, State/Province=4, National=7, Multi-country=9–10.\n\nAlso compute:\n- SuggestedModelScore (0–10) = 0.25*Scope + 0.25*NodeImportance + 0.20*RiskType + 0.20*TradeDependency + 0.10*PopulationImpact.\n- Confidence (0–1).\n- EvidenceFieldsUsed: subset of [\"title\",\"description\",\"content\"].\n\nCONSTRAINTS\n- Be conservative; if speculative/outdated: lower ScopeScore or set \"is_speculative\": true.\n- If the event looks minor but the headline is sensational, cap SuggestedModelScore ≤ 4.\n- Prefer title + description. If content is long, read only the first ~1000 characters.\n\nOUTPUT\nReturn ONLY a JSON array. Each array element MUST correspond 1:1 to an input item and MUST include the same \"id\".\nSchema for each element:\n{\n  \"id\": \"<copy from input>\",\n  \"risk_types\": [\"Physical\" | \"Cyber\" | \"Trade/Geopolitical\" | \"Infrastructure/Transport\", ...],\n  \"scope\": \"Local\" | \"Regional\" | \"Global\" | null,\n  \"impacted_nodes\": [{\"name\":\"...\", \"type\":\"port|canal|rail|factory|border|road|airport|other\", \"country\":\"...\", \"iso2\":\"..\"}] | [],\n  \"countries_impacted\": [\"US\",\"IN\", ...] | [],\n  \"economic_importance\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"trade_dependency\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"population_impact_bucket\": \"Minimal\" | \"City\" | \"State/Province\" | \"National\" | \"Multi-country\" | null,\n  \"impact_summary\": \"...\",\n  \"scores\": {\n    \"scope_score\": 0,\n    \"node_importance_score\": 0,\n    \"risk_type_score\": 0,\n    \"trade_dependency_score\": 0,\n    \"population_impact_score\": 0,\n    \"suggested_model_score\": 0\n  },\n  \"confidence\": 0.0,\n  \"is_speculative\": false,\n  \"evidence_fields_used\": [\"title\",\"description\"]\n}\n\nINPUT_JSON = {{ JSON.stringify($json.items) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        944,
+        1344
+      ],
+      "id": "832bb4c8-bae3-4a75-8f27-e6d96dfc7e4e",
+      "name": "Message a model4",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "yuuUDryYiacSOJx3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an analyst extracting structured supply-chain risk signals from news articles.\nReturn STRICT JSON only (no prose). Do not invent facts. If unknown, use null.\n\nINPUT\n- INPUT_JSON is a JSON array. Each element has fields like:\n  { \"id\", \"title\", \"description\", \"content\", \"publishedAt\", \"source\", \"url\" }\n\nTASK (apply to every element of INPUT_JSON independently):\n1) Classify disruption type(s): [\"Physical\",\"Cyber\",\"Trade/Geopolitical\",\"Infrastructure/Transport\"].\n2) Extract impacted nodes (ports, canals, rail corridors, factories, borders) with country.\n3) Map countries to ISO-3166-1 alpha-2 codes. If multiple countries, return all.\n4) Assess scope: \"Local\" | \"Regional\" | \"Global\".\n5) Assess economic importance of the main node: \"High\" | \"Medium\" | \"Low\".\n6) Identify trade dependency context: \"High\" | \"Medium\" | \"Low\".\n7) Estimate population/countries impacted (bucketed):\n   PopImpactBucket ∈ [\"Minimal\",\"City\",\"State/Province\",\"National\",\"Multi-country\"].\n8) Provide a ≤25-word impact summary focused on supply-chain consequences.\n\nSCORING (0–10, integers allowed; use 0 when truly unknown):\n- ScopeScore: None/Irrelevant=1, Local=1, State/Province=3, Regional(multi-province)=5, Multi-country(2–3)=7, Global(≥4)=9–10.\n- NodeImportanceScore: High(critical/global hub)=9–10, Medium=5, Low=1, None/Unknown=0.\n- RiskTypeScore (max if multiple): Cyber=9–10, Trade/Geopolitical=8, Infrastructure/Transport=5, Physical=3, None/Unknown=0.\n- TradeDependencyScore: High=9–10, Medium=5, Low=1, None/Unknown=0.\n- PopulationImpactScore: Minimal=0, City=2, State/Province=4, National=7, Multi-country=9–10.\n\nAlso compute:\n- SuggestedModelScore (0–10) = 0.25*Scope + 0.25*NodeImportance + 0.20*RiskType + 0.20*TradeDependency + 0.10*PopulationImpact.\n- Confidence (0–1).\n- EvidenceFieldsUsed: subset of [\"title\",\"description\",\"content\"].\n\nCONSTRAINTS\n- Be conservative; if speculative/outdated: lower ScopeScore or set \"is_speculative\": true.\n- If the event looks minor but the headline is sensational, cap SuggestedModelScore ≤ 4.\n- Prefer title + description. If content is long, read only the first ~1000 characters.\n\nOUTPUT\nReturn ONLY a JSON array. Each array element MUST correspond 1:1 to an input item and MUST include the same \"id\".\nSchema for each element:\n{\n  \"id\": \"<copy from input>\",\n  \"risk_types\": [\"Physical\" | \"Cyber\" | \"Trade/Geopolitical\" | \"Infrastructure/Transport\", ...],\n  \"scope\": \"Local\" | \"Regional\" | \"Global\" | null,\n  \"impacted_nodes\": [{\"name\":\"...\", \"type\":\"port|canal|rail|factory|border|road|airport|other\", \"country\":\"...\", \"iso2\":\"..\"}] | [],\n  \"countries_impacted\": [\"US\",\"IN\", ...] | [],\n  \"economic_importance\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"trade_dependency\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"population_impact_bucket\": \"Minimal\" | \"City\" | \"State/Province\" | \"National\" | \"Multi-country\" | null,\n  \"impact_summary\": \"...\",\n  \"scores\": {\n    \"scope_score\": 0,\n    \"node_importance_score\": 0,\n    \"risk_type_score\": 0,\n    \"trade_dependency_score\": 0,\n    \"population_impact_score\": 0,\n    \"suggested_model_score\": 0\n  },\n  \"confidence\": 0.0,\n  \"is_speculative\": false,\n  \"evidence_fields_used\": [\"title\",\"description\"]\n}\n\nINPUT_JSON = {{ JSON.stringify($json.items) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        944,
+        960
+      ],
+      "id": "7b6586a6-b896-4146-b523-9559fdd090e5",
+      "name": "Message a model5",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "yuuUDryYiacSOJx3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an analyst extracting structured supply-chain risk signals from news articles.\nReturn STRICT JSON only (no prose). Do not invent facts. If unknown, use null.\n\nINPUT\n- INPUT_JSON is a JSON array. Each element has fields like:\n  { \"id\", \"title\", \"description\", \"content\", \"publishedAt\", \"source\", \"url\" }\n\nTASK (apply to every element of INPUT_JSON independently):\n1) Classify disruption type(s): [\"Physical\",\"Cyber\",\"Trade/Geopolitical\",\"Infrastructure/Transport\"].\n2) Extract impacted nodes (ports, canals, rail corridors, factories, borders) with country.\n3) Map countries to ISO-3166-1 alpha-2 codes. If multiple countries, return all.\n4) Assess scope: \"Local\" | \"Regional\" | \"Global\".\n5) Assess economic importance of the main node: \"High\" | \"Medium\" | \"Low\".\n6) Identify trade dependency context: \"High\" | \"Medium\" | \"Low\".\n7) Estimate population/countries impacted (bucketed):\n   PopImpactBucket ∈ [\"Minimal\",\"City\",\"State/Province\",\"National\",\"Multi-country\"].\n8) Provide a ≤25-word impact summary focused on supply-chain consequences.\n\nSCORING (0–10, integers allowed; use 0 when truly unknown):\n- ScopeScore: None/Irrelevant=1, Local=1, State/Province=3, Regional(multi-province)=5, Multi-country(2–3)=7, Global(≥4)=9–10.\n- NodeImportanceScore: High(critical/global hub)=9–10, Medium=5, Low=1, None/Unknown=0.\n- RiskTypeScore (max if multiple): Cyber=9–10, Trade/Geopolitical=8, Infrastructure/Transport=5, Physical=3, None/Unknown=0.\n- TradeDependencyScore: High=9–10, Medium=5, Low=1, None/Unknown=0.\n- PopulationImpactScore: Minimal=0, City=2, State/Province=4, National=7, Multi-country=9–10.\n\nAlso compute:\n- SuggestedModelScore (0–10) = 0.25*Scope + 0.25*NodeImportance + 0.20*RiskType + 0.20*TradeDependency + 0.10*PopulationImpact.\n- Confidence (0–1).\n- EvidenceFieldsUsed: subset of [\"title\",\"description\",\"content\"].\n\nCONSTRAINTS\n- Be conservative; if speculative/outdated: lower ScopeScore or set \"is_speculative\": true.\n- If the event looks minor but the headline is sensational, cap SuggestedModelScore ≤ 4.\n- Prefer title + description. If content is long, read only the first ~1000 characters.\n\nOUTPUT\nReturn ONLY a JSON array. Each array element MUST correspond 1:1 to an input item and MUST include the same \"id\".\nSchema for each element:\n{\n  \"id\": \"<copy from input>\",\n  \"risk_types\": [\"Physical\" | \"Cyber\" | \"Trade/Geopolitical\" | \"Infrastructure/Transport\", ...],\n  \"scope\": \"Local\" | \"Regional\" | \"Global\" | null,\n  \"impacted_nodes\": [{\"name\":\"...\", \"type\":\"port|canal|rail|factory|border|road|airport|other\", \"country\":\"...\", \"iso2\":\"..\"}] | [],\n  \"countries_impacted\": [\"US\",\"IN\", ...] | [],\n  \"economic_importance\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"trade_dependency\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"population_impact_bucket\": \"Minimal\" | \"City\" | \"State/Province\" | \"National\" | \"Multi-country\" | null,\n  \"impact_summary\": \"...\",\n  \"scores\": {\n    \"scope_score\": 0,\n    \"node_importance_score\": 0,\n    \"risk_type_score\": 0,\n    \"trade_dependency_score\": 0,\n    \"population_impact_score\": 0,\n    \"suggested_model_score\": 0\n  },\n  \"confidence\": 0.0,\n  \"is_speculative\": false,\n  \"evidence_fields_used\": [\"title\",\"description\"]\n}\n\nINPUT_JSON = {{ JSON.stringify($json.items) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        944,
+        1152
+      ],
+      "id": "8f095244-c245-4943-a248-4bd54fab7b2b",
+      "name": "Message a model6",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "yuuUDryYiacSOJx3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an analyst extracting structured supply-chain risk signals from news articles.\nReturn STRICT JSON only (no prose). Do not invent facts. If unknown, use null.\n\nINPUT\n- INPUT_JSON is a JSON array. Each element has fields like:\n  { \"id\", \"title\", \"description\", \"content\", \"publishedAt\", \"source\", \"url\" }\n\nTASK (apply to every element of INPUT_JSON independently):\n1) Classify disruption type(s): [\"Physical\",\"Cyber\",\"Trade/Geopolitical\",\"Infrastructure/Transport\"].\n2) Extract impacted nodes (ports, canals, rail corridors, factories, borders) with country.\n3) Map countries to ISO-3166-1 alpha-2 codes. If multiple countries, return all.\n4) Assess scope: \"Local\" | \"Regional\" | \"Global\".\n5) Assess economic importance of the main node: \"High\" | \"Medium\" | \"Low\".\n6) Identify trade dependency context: \"High\" | \"Medium\" | \"Low\".\n7) Estimate population/countries impacted (bucketed):\n   PopImpactBucket ∈ [\"Minimal\",\"City\",\"State/Province\",\"National\",\"Multi-country\"].\n8) Provide a ≤25-word impact summary focused on supply-chain consequences.\n\nSCORING (0–10, integers allowed; use 0 when truly unknown):\n- ScopeScore: None/Irrelevant=1, Local=1, State/Province=3, Regional(multi-province)=5, Multi-country(2–3)=7, Global(≥4)=9–10.\n- NodeImportanceScore: High(critical/global hub)=9–10, Medium=5, Low=1, None/Unknown=0.\n- RiskTypeScore (max if multiple): Cyber=9–10, Trade/Geopolitical=8, Infrastructure/Transport=5, Physical=3, None/Unknown=0.\n- TradeDependencyScore: High=9–10, Medium=5, Low=1, None/Unknown=0.\n- PopulationImpactScore: Minimal=0, City=2, State/Province=4, National=7, Multi-country=9–10.\n\nAlso compute:\n- SuggestedModelScore (0–10) = 0.25*Scope + 0.25*NodeImportance + 0.20*RiskType + 0.20*TradeDependency + 0.10*PopulationImpact.\n- Confidence (0–1).\n- EvidenceFieldsUsed: subset of [\"title\",\"description\",\"content\"].\n\nCONSTRAINTS\n- Be conservative; if speculative/outdated: lower ScopeScore or set \"is_speculative\": true.\n- If the event looks minor but the headline is sensational, cap SuggestedModelScore ≤ 4.\n- Prefer title + description. If content is long, read only the first ~1000 characters.\n\nOUTPUT\nReturn ONLY a JSON array. Each array element MUST correspond 1:1 to an input item and MUST include the same \"id\".\nSchema for each element:\n{\n  \"id\": \"<copy from input>\",\n  \"risk_types\": [\"Physical\" | \"Cyber\" | \"Trade/Geopolitical\" | \"Infrastructure/Transport\", ...],\n  \"scope\": \"Local\" | \"Regional\" | \"Global\" | null,\n  \"impacted_nodes\": [{\"name\":\"...\", \"type\":\"port|canal|rail|factory|border|road|airport|other\", \"country\":\"...\", \"iso2\":\"..\"}] | [],\n  \"countries_impacted\": [\"US\",\"IN\", ...] | [],\n  \"economic_importance\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"trade_dependency\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"population_impact_bucket\": \"Minimal\" | \"City\" | \"State/Province\" | \"National\" | \"Multi-country\" | null,\n  \"impact_summary\": \"...\",\n  \"scores\": {\n    \"scope_score\": 0,\n    \"node_importance_score\": 0,\n    \"risk_type_score\": 0,\n    \"trade_dependency_score\": 0,\n    \"population_impact_score\": 0,\n    \"suggested_model_score\": 0\n  },\n  \"confidence\": 0.0,\n  \"is_speculative\": false,\n  \"evidence_fields_used\": [\"title\",\"description\"]\n}\n\nINPUT_JSON = {{ JSON.stringify($json.items) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        944,
+        768
+      ],
+      "id": "4941c970-f546-4e4f-a3a3-9f119ab5fde4",
+      "name": "Message a model7",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "yuuUDryYiacSOJx3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an analyst extracting structured supply-chain risk signals from news articles.\nReturn STRICT JSON only (no prose). Do not invent facts. If unknown, use null.\n\nINPUT\n- INPUT_JSON is a JSON array. Each element has fields like:\n  { \"id\", \"title\", \"description\", \"content\", \"publishedAt\", \"source\", \"url\" }\n\nTASK (apply to every element of INPUT_JSON independently):\n1) Classify disruption type(s): [\"Physical\",\"Cyber\",\"Trade/Geopolitical\",\"Infrastructure/Transport\"].\n2) Extract impacted nodes (ports, canals, rail corridors, factories, borders) with country.\n3) Map countries to ISO-3166-1 alpha-2 codes. If multiple countries, return all.\n4) Assess scope: \"Local\" | \"Regional\" | \"Global\".\n5) Assess economic importance of the main node: \"High\" | \"Medium\" | \"Low\".\n6) Identify trade dependency context: \"High\" | \"Medium\" | \"Low\".\n7) Estimate population/countries impacted (bucketed):\n   PopImpactBucket ∈ [\"Minimal\",\"City\",\"State/Province\",\"National\",\"Multi-country\"].\n8) Provide a ≤25-word impact summary focused on supply-chain consequences.\n\nSCORING (0–10, integers allowed; use 0 when truly unknown):\n- ScopeScore: None/Irrelevant=1, Local=1, State/Province=3, Regional(multi-province)=5, Multi-country(2–3)=7, Global(≥4)=9–10.\n- NodeImportanceScore: High(critical/global hub)=9–10, Medium=5, Low=1, None/Unknown=0.\n- RiskTypeScore (max if multiple): Cyber=9–10, Trade/Geopolitical=8, Infrastructure/Transport=5, Physical=3, None/Unknown=0.\n- TradeDependencyScore: High=9–10, Medium=5, Low=1, None/Unknown=0.\n- PopulationImpactScore: Minimal=0, City=2, State/Province=4, National=7, Multi-country=9–10.\n\nAlso compute:\n- SuggestedModelScore (0–10) = 0.25*Scope + 0.25*NodeImportance + 0.20*RiskType + 0.20*TradeDependency + 0.10*PopulationImpact.\n- Confidence (0–1).\n- EvidenceFieldsUsed: subset of [\"title\",\"description\",\"content\"].\n\nCONSTRAINTS\n- Be conservative; if speculative/outdated: lower ScopeScore or set \"is_speculative\": true.\n- If the event looks minor but the headline is sensational, cap SuggestedModelScore ≤ 4.\n- Prefer title + description. If content is long, read only the first ~1000 characters.\n\nOUTPUT\nReturn ONLY a JSON array. Each array element MUST correspond 1:1 to an input item and MUST include the same \"id\".\nSchema for each element:\n{\n  \"id\": \"<copy from input>\",\n  \"risk_types\": [\"Physical\" | \"Cyber\" | \"Trade/Geopolitical\" | \"Infrastructure/Transport\", ...],\n  \"scope\": \"Local\" | \"Regional\" | \"Global\" | null,\n  \"impacted_nodes\": [{\"name\":\"...\", \"type\":\"port|canal|rail|factory|border|road|airport|other\", \"country\":\"...\", \"iso2\":\"..\"}] | [],\n  \"countries_impacted\": [\"US\",\"IN\", ...] | [],\n  \"economic_importance\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"trade_dependency\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"population_impact_bucket\": \"Minimal\" | \"City\" | \"State/Province\" | \"National\" | \"Multi-country\" | null,\n  \"impact_summary\": \"...\",\n  \"scores\": {\n    \"scope_score\": 0,\n    \"node_importance_score\": 0,\n    \"risk_type_score\": 0,\n    \"trade_dependency_score\": 0,\n    \"population_impact_score\": 0,\n    \"suggested_model_score\": 0\n  },\n  \"confidence\": 0.0,\n  \"is_speculative\": false,\n  \"evidence_fields_used\": [\"title\",\"description\"]\n}\n\nINPUT_JSON = {{ JSON.stringify($json.items) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        944,
+        576
+      ],
+      "id": "22dbb4f5-18cc-4d45-ba95-1bf3d62bc54d",
+      "name": "Message a model8",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "yuuUDryYiacSOJx3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an analyst extracting structured supply-chain risk signals from news articles.\nReturn STRICT JSON only (no prose). Do not invent facts. If unknown, use null.\n\nINPUT\n- INPUT_JSON is a JSON array. Each element has fields like:\n  { \"id\", \"title\", \"description\", \"content\", \"publishedAt\", \"source\", \"url\" }\n\nTASK (apply to every element of INPUT_JSON independently):\n1) Classify disruption type(s): [\"Physical\",\"Cyber\",\"Trade/Geopolitical\",\"Infrastructure/Transport\"].\n2) Extract impacted nodes (ports, canals, rail corridors, factories, borders) with country.\n3) Map countries to ISO-3166-1 alpha-2 codes. If multiple countries, return all.\n4) Assess scope: \"Local\" | \"Regional\" | \"Global\".\n5) Assess economic importance of the main node: \"High\" | \"Medium\" | \"Low\".\n6) Identify trade dependency context: \"High\" | \"Medium\" | \"Low\".\n7) Estimate population/countries impacted (bucketed):\n   PopImpactBucket ∈ [\"Minimal\",\"City\",\"State/Province\",\"National\",\"Multi-country\"].\n8) Provide a ≤25-word impact summary focused on supply-chain consequences.\n\nSCORING (0–10, integers allowed; use 0 when truly unknown):\n- ScopeScore: None/Irrelevant=1, Local=1, State/Province=3, Regional(multi-province)=5, Multi-country(2–3)=7, Global(≥4)=9–10.\n- NodeImportanceScore: High(critical/global hub)=9–10, Medium=5, Low=1, None/Unknown=0.\n- RiskTypeScore (max if multiple): Cyber=9–10, Trade/Geopolitical=8, Infrastructure/Transport=5, Physical=3, None/Unknown=0.\n- TradeDependencyScore: High=9–10, Medium=5, Low=1, None/Unknown=0.\n- PopulationImpactScore: Minimal=0, City=2, State/Province=4, National=7, Multi-country=9–10.\n\nAlso compute:\n- SuggestedModelScore (0–10) = 0.25*Scope + 0.25*NodeImportance + 0.20*RiskType + 0.20*TradeDependency + 0.10*PopulationImpact.\n- Confidence (0–1).\n- EvidenceFieldsUsed: subset of [\"title\",\"description\",\"content\"].\n\nCONSTRAINTS\n- Be conservative; if speculative/outdated: lower ScopeScore or set \"is_speculative\": true.\n- If the event looks minor but the headline is sensational, cap SuggestedModelScore ≤ 4.\n- Prefer title + description. If content is long, read only the first ~1000 characters.\n\nOUTPUT\nReturn ONLY a JSON array. Each array element MUST correspond 1:1 to an input item and MUST include the same \"id\".\nSchema for each element:\n{\n  \"id\": \"<copy from input>\",\n  \"risk_types\": [\"Physical\" | \"Cyber\" | \"Trade/Geopolitical\" | \"Infrastructure/Transport\", ...],\n  \"scope\": \"Local\" | \"Regional\" | \"Global\" | null,\n  \"impacted_nodes\": [{\"name\":\"...\", \"type\":\"port|canal|rail|factory|border|road|airport|other\", \"country\":\"...\", \"iso2\":\"..\"}] | [],\n  \"countries_impacted\": [\"US\",\"IN\", ...] | [],\n  \"economic_importance\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"trade_dependency\": \"High\" | \"Medium\" | \"Low\" | null,\n  \"population_impact_bucket\": \"Minimal\" | \"City\" | \"State/Province\" | \"National\" | \"Multi-country\" | null,\n  \"impact_summary\": \"...\",\n  \"scores\": {\n    \"scope_score\": 0,\n    \"node_importance_score\": 0,\n    \"risk_type_score\": 0,\n    \"trade_dependency_score\": 0,\n    \"population_impact_score\": 0,\n    \"suggested_model_score\": 0\n  },\n  \"confidence\": 0.0,\n  \"is_speculative\": false,\n  \"evidence_fields_used\": [\"title\",\"description\"]\n}\n\nINPUT_JSON = {{ JSON.stringify($json.items) }}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        944,
+        192
+      ],
+      "id": "2597e3d3-927e-4d97-b834-cadde6dcec37",
+      "name": "Message a model9",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "yuuUDryYiacSOJx3",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\n\nfor (const i of items) {\n  const parts = i.json.content?.parts;\n  if (!parts || !parts[0]?.text) continue;\n\n  const raw = parts[0].text.trim();\n  let arr;\n  try {\n    arr = JSON.parse(raw);        // Gemini returns a JSON array (as text)\n  } catch (e) {\n    throw new Error(\"Parse error: \" + raw.slice(0, 400));\n  }\n\n  for (const obj of arr) {\n    // Hoist the arrays you want to split on\n    out.push({\n      json: {\n        id: obj.id,\n        // top-level mirrors (so Item Lists can split them)\n        countries_impacted: obj.countries_impacted ?? [],\n        impacted_nodes: obj.impacted_nodes ?? [],\n        risk_types: obj.risk_types ?? [],\n        // keep full model payload too for mapping later\n        parsedData: obj,\n        _raw_model_json: raw\n      }\n    });\n  }\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        -192
+      ],
+      "id": "736df656-fead-460d-99de-d10fb7a602a1",
+      "name": "Parse JSON1",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\n\nfor (const i of items) {\n  const parts = i.json.content?.parts;\n  if (!parts || !parts[0]?.text) continue;\n\n  const raw = parts[0].text.trim();\n  let arr;\n  try {\n    arr = JSON.parse(raw);        // Gemini returns a JSON array (as text)\n  } catch (e) {\n    throw new Error(\"Parse error: \" + raw.slice(0, 400));\n  }\n\n  for (const obj of arr) {\n    // Hoist the arrays you want to split on\n    out.push({\n      json: {\n        id: obj.id,\n        // top-level mirrors (so Item Lists can split them)\n        countries_impacted: obj.countries_impacted ?? [],\n        impacted_nodes: obj.impacted_nodes ?? [],\n        risk_types: obj.risk_types ?? [],\n        // keep full model payload too for mapping later\n        parsedData: obj,\n        _raw_model_json: raw\n      }\n    });\n  }\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        0
+      ],
+      "id": "c39c7871-0e00-43ec-87fb-2e5a41d4ded5",
+      "name": "Parse JSON2",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\n\nfor (const i of items) {\n  const parts = i.json.content?.parts;\n  if (!parts || !parts[0]?.text) continue;\n\n  const raw = parts[0].text.trim();\n  let arr;\n  try {\n    arr = JSON.parse(raw);        // Gemini returns a JSON array (as text)\n  } catch (e) {\n    throw new Error(\"Parse error: \" + raw.slice(0, 400));\n  }\n\n  for (const obj of arr) {\n    // Hoist the arrays you want to split on\n    out.push({\n      json: {\n        id: obj.id,\n        // top-level mirrors (so Item Lists can split them)\n        countries_impacted: obj.countries_impacted ?? [],\n        impacted_nodes: obj.impacted_nodes ?? [],\n        risk_types: obj.risk_types ?? [],\n        // keep full model payload too for mapping later\n        parsedData: obj,\n        _raw_model_json: raw\n      }\n    });\n  }\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        192
+      ],
+      "id": "8483edcc-e741-4a4c-86c7-facd96f52033",
+      "name": "Parse JSON3"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\n\nfor (const i of items) {\n  const parts = i.json.content?.parts;\n  if (!parts || !parts[0]?.text) continue;\n\n  const raw = parts[0].text.trim();\n  let arr;\n  try {\n    arr = JSON.parse(raw);        // Gemini returns a JSON array (as text)\n  } catch (e) {\n    throw new Error(\"Parse error: \" + raw.slice(0, 400));\n  }\n\n  for (const obj of arr) {\n    // Hoist the arrays you want to split on\n    out.push({\n      json: {\n        id: obj.id,\n        // top-level mirrors (so Item Lists can split them)\n        countries_impacted: obj.countries_impacted ?? [],\n        impacted_nodes: obj.impacted_nodes ?? [],\n        risk_types: obj.risk_types ?? [],\n        // keep full model payload too for mapping later\n        parsedData: obj,\n        _raw_model_json: raw\n      }\n    });\n  }\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        384
+      ],
+      "id": "0ac152d9-7993-4034-b64e-4c994527e603",
+      "name": "Parse JSON4",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\n\nfor (const i of items) {\n  const parts = i.json.content?.parts;\n  if (!parts || !parts[0]?.text) continue;\n\n  const raw = parts[0].text.trim();\n  let arr;\n  try {\n    arr = JSON.parse(raw);        // Gemini returns a JSON array (as text)\n  } catch (e) {\n    throw new Error(\"Parse error: \" + raw.slice(0, 400));\n  }\n\n  for (const obj of arr) {\n    // Hoist the arrays you want to split on\n    out.push({\n      json: {\n        id: obj.id,\n        // top-level mirrors (so Item Lists can split them)\n        countries_impacted: obj.countries_impacted ?? [],\n        impacted_nodes: obj.impacted_nodes ?? [],\n        risk_types: obj.risk_types ?? [],\n        // keep full model payload too for mapping later\n        parsedData: obj,\n        _raw_model_json: raw\n      }\n    });\n  }\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        576
+      ],
+      "id": "23d559f6-cab0-49a2-bb0f-381c8b1b0ded",
+      "name": "Parse JSON5",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\n\nfor (const i of items) {\n  const parts = i.json.content?.parts;\n  if (!parts || !parts[0]?.text) continue;\n\n  const raw = parts[0].text.trim();\n  let arr;\n  try {\n    arr = JSON.parse(raw);        // Gemini returns a JSON array (as text)\n  } catch (e) {\n    throw new Error(\"Parse error: \" + raw.slice(0, 400));\n  }\n\n  for (const obj of arr) {\n    // Hoist the arrays you want to split on\n    out.push({\n      json: {\n        id: obj.id,\n        // top-level mirrors (so Item Lists can split them)\n        countries_impacted: obj.countries_impacted ?? [],\n        impacted_nodes: obj.impacted_nodes ?? [],\n        risk_types: obj.risk_types ?? [],\n        // keep full model payload too for mapping later\n        parsedData: obj,\n        _raw_model_json: raw\n      }\n    });\n  }\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        768
+      ],
+      "id": "3e38ae44-89be-4a2b-8697-6fe79804dbfc",
+      "name": "Parse JSON6",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\n\nfor (const i of items) {\n  const parts = i.json.content?.parts;\n  if (!parts || !parts[0]?.text) continue;\n\n  const raw = parts[0].text.trim();\n  let arr;\n  try {\n    arr = JSON.parse(raw);        // Gemini returns a JSON array (as text)\n  } catch (e) {\n    throw new Error(\"Parse error: \" + raw.slice(0, 400));\n  }\n\n  for (const obj of arr) {\n    // Hoist the arrays you want to split on\n    out.push({\n      json: {\n        id: obj.id,\n        // top-level mirrors (so Item Lists can split them)\n        countries_impacted: obj.countries_impacted ?? [],\n        impacted_nodes: obj.impacted_nodes ?? [],\n        risk_types: obj.risk_types ?? [],\n        // keep full model payload too for mapping later\n        parsedData: obj,\n        _raw_model_json: raw\n      }\n    });\n  }\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        960
+      ],
+      "id": "150c3046-69df-4098-8482-78587abe2a0e",
+      "name": "Parse JSON7",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\n\nfor (const i of items) {\n  const parts = i.json.content?.parts;\n  if (!parts || !parts[0]?.text) continue;\n\n  const raw = parts[0].text.trim();\n  let arr;\n  try {\n    arr = JSON.parse(raw);        // Gemini returns a JSON array (as text)\n  } catch (e) {\n    throw new Error(\"Parse error: \" + raw.slice(0, 400));\n  }\n\n  for (const obj of arr) {\n    // Hoist the arrays you want to split on\n    out.push({\n      json: {\n        id: obj.id,\n        // top-level mirrors (so Item Lists can split them)\n        countries_impacted: obj.countries_impacted ?? [],\n        impacted_nodes: obj.impacted_nodes ?? [],\n        risk_types: obj.risk_types ?? [],\n        // keep full model payload too for mapping later\n        parsedData: obj,\n        _raw_model_json: raw\n      }\n    });\n  }\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        1152
+      ],
+      "id": "8c127d4f-338a-42b2-83cb-dc6da674afeb",
+      "name": "Parse JSON8",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = [];\n\nfor (const i of items) {\n  const parts = i.json.content?.parts;\n  if (!parts || !parts[0]?.text) continue;\n\n  const raw = parts[0].text.trim();\n  let arr;\n  try {\n    arr = JSON.parse(raw);        // Gemini returns a JSON array (as text)\n  } catch (e) {\n    throw new Error(\"Parse error: \" + raw.slice(0, 400));\n  }\n\n  for (const obj of arr) {\n    // Hoist the arrays you want to split on\n    out.push({\n      json: {\n        id: obj.id,\n        // top-level mirrors (so Item Lists can split them)\n        countries_impacted: obj.countries_impacted ?? [],\n        impacted_nodes: obj.impacted_nodes ?? [],\n        risk_types: obj.risk_types ?? [],\n        // keep full model payload too for mapping later\n        parsedData: obj,\n        _raw_model_json: raw\n      }\n    });\n  }\n}\n\nreturn out;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        1344
+      ],
+      "id": "f674d20c-7ada-4740-a8bb-16bd9125a188",
+      "name": "Parse JSON9",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "numberInputs": 10
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1568,
+        400
+      ],
+      "id": "36bda9da-1edf-4a4f-9f9d-cc4b10e887a5",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"engine\": \"google_news_light\",\n  \"q\": \"(\\\"supply chain\\\" OR \\\"logistics\\\") AND (\\\"port strike\\\" OR \\\"border closure\\\" OR \\\"trade embargo\\\" OR \\\"maritime blockade\\\" OR \\\"shipping delay\\\" OR \\\"container shortage\\\" OR \\\"port congestion\\\" OR \\\"rail strike\\\" OR \\\"airport closure\\\" OR \\\"factory shutdown\\\" OR \\\"plant fire\\\" OR \\\"labour strike\\\" OR \\\"industrial accident\\\" OR \\\"cyber attack\\\" OR \\\"ransomware\\\" OR \\\"IT outage\\\" OR \\\"storm damage\\\" OR \\\"flooding\\\" OR \\\"hurricane\\\" OR \\\"earthquake\\\")\",\n  \"hl\": \"en\",\n  \"gl\": \"in\",\n  \"google_domain\": \"google.com\",\n  \"device\": \"desktop\",\n  \"num\": 100,\n  \"start\": 0,\n  \"no_cache\": false,\n\"daysSinceLast\": \"{{ Math.max(0, Math.floor((Date.now() - Date.parse($json['Last PublishedAt'])) / 86400000)) }}\",\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -848,
+        864
+      ],
+      "id": "fb58835c-5cee-47a6-8d9a-e8206724f708",
+      "name": "Init"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Next Page (Code) — after the SerpAPI HTTP node\n// Mode: Run once for all items\n\nconst res = items[0]?.json || {};\nconst hasNext = !!(res.serpapi_pagination && res.serpapi_pagination.next);\nif (!hasNext) {\n  return []; // stop the loop\n}\n\n// Read current paging from response (no URL parsing needed)\nconst sp = res.search_parameters || {};\nconst currentStart = Number(sp.start || 0);\nconst num = Number(sp.num || 10);\n\n// Base params from your Init node (rename \"Init\" if yours is different)\nconst init = $items(\"Init\")[0].json;\n\nreturn [{\n  json: {\n    // keep your original query parameters\n    engine: init.engine || 'google_news_light',\n    q: init.q,\n    hl: init.hl || 'en',\n    gl: init.gl || 'in',\n    google_domain: init.google_domain || 'google.com',\n    device: init.device || 'desktop',\n    no_cache: init.no_cache ?? false,\n    \"daysSinceLast\": init.daysSinceLast,\n\n    // pagination\n    num: num,                      // same page size as the response\n    start: currentStart + num      // advance the offset\n  },\n  pairedItem: { item: 0 }\n}];\n \n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -192,
+        464
+      ],
+      "id": "a9584c59-21e0-4158-9676-9d8ded047d4a",
+      "name": "Compute Pages"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Inputs: many items, each item.json = { id, title, summary, url, published_at, ... }\n  const input = items.map(i => i.json);\nconst total = input.length;\n\n// Round up so every item is included\nconst BATCH_SIZE = Math.ceil(total / 10);\n\n// make contiguous batches\nconst batches = [];\nfor (let i = 0; i < input.length; i += BATCH_SIZE) {\n  const chunk = input.slice(i, i + BATCH_SIZE);\n  const batchIndex = Math.floor(i / BATCH_SIZE);\n  const lane = batchIndex % 10; // 5 parallel lanes\n  batches.push({\n    json: {\n      batch_id: batchIndex,\n      lane,\n      items: chunk, // array of articles for this batch\n    }\n  });\n}\nreturn batches;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        480
+      ],
+      "id": "f34b9d04-50f4-4fc9-afbd-8f84553f2943",
+      "name": "Batching"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "id": "d8af326b-30e1-4704-af79-e2c9f5dadfab",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        -1328,
+        864
+      ],
+      "typeVersion": 1.2
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Raw data in News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get News": {
+      "main": [
+        [
+          {
+            "node": "Compute Pages",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Data & Primary Key": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Normalize Data & Primary Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Columns": {
+      "main": [
+        [
+          {
+            "node": "Staging Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Raw data in News": {
+      "main": [
+        [
+          {
+            "node": "Batching",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Combine LLM output with Inputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine LLM output with Inputs": {
+      "main": [
+        [
+          {
+            "node": "Explode Basis Countries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Explode Basis Countries": {
+      "main": [
+        [
+          {
+            "node": "Map Columns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Last Fetched Date": {
+      "main": [
+        [
+          {
+            "node": "Init",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model9",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model8",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model7",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model6",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model1": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model2": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model9": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model3": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model8": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model7": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model5": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model6": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model4": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Parse JSON2": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Parse JSON3": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Parse JSON4": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Parse JSON5": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "Parse JSON6": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 6
+          }
+        ]
+      ]
+    },
+    "Parse JSON8": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 8
+          }
+        ]
+      ]
+    },
+    "Parse JSON9": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 9
+          }
+        ]
+      ]
+    },
+    "Parse JSON7": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 7
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Combine LLM output with Inputs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Init": {
+      "main": [
+        [
+          {
+            "node": "Get News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Pages": {
+      "main": [
+        [
+          {
+            "node": "Get News",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batching": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Last Fetched Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7fa94909-8e44-492d-8d04-9609471c0161",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "475daac84cac0803a26cc78d72459f365d29a76e384de860efeb8e77b778ad67"
+  },
+  "id": "ntQbpSPbjMvP0rZp",
+  "tags": []
+}
